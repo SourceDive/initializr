@@ -301,6 +301,9 @@ public class GroovySourceCodeWriter implements SourceCodeWriter<GroovySourceCode
 
 		@Override
 		public CodeBlock arrayOf(CodeBlock... values) {
+			if (values.length == 1) {
+				return values[0];
+			}
 			return CodeBlock.of("[ $L ]", CodeBlock.join(Arrays.asList(values), ", "));
 		}
 

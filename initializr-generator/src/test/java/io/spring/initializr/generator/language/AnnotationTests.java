@@ -18,10 +18,12 @@ package io.spring.initializr.generator.language;
 
 import java.io.StringWriter;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.stream.Stream;
 
 import io.spring.initializr.generator.io.IndentingWriter;
 import io.spring.initializr.generator.io.SimpleIndentStrategy;
+import io.spring.initializr.generator.language.Annotation.AttributeKind;
 import io.spring.initializr.generator.language.CodeBlock.FormattingOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -40,6 +42,25 @@ import static org.mockito.Mockito.verify;
  * @author Stephane Nicoll
  */
 class AnnotationTests {
+
+	private static final FormattingOptions BRACKET_FORMATTING_OPTIONS = new FormattingOptions() {
+
+		@Override
+		public String statementSeparator() {
+			return "";
+		}
+
+		@Override
+		public CodeBlock arrayOf(CodeBlock... values) {
+			return CodeBlock.of("[$L]", CodeBlock.join(Arrays.asList(values), ", "));
+		}
+
+		@Override
+		public CodeBlock classReference(ClassName className) {
+			return CodeBlock.of("$T::class", className);
+		}
+
+	};
 
 	@Test
 	void annotationWithInvalidParameterValue() {
@@ -197,6 +218,59 @@ class AnnotationTests {
 		assertThat(write(test)).isEqualTo("@Test(types = { StringWriter.class, AnotherWriter.class })");
 		assertThat(test.getImports()).containsOnly("com.example.Test", StringWriter.class.getName(),
 				"com.example.io.AnotherWriter");
+	}
+
+	@Test
+	void annotationWithDefaultAttributeKind() {
+		Annotation test = Annotation.of(ClassName.of("com.example.Test")).set("counter", 42).build();
+		assertThat(test.getAttributes()).singleElement()
+			.satisfies((attribute) -> assertThat(attribute.getKind()).isEqualTo(AttributeKind.INFERRED));
+	}
+
+	@Test
+	void annotationWithArrayAttributeKind() {
+		Annotation test = Annotation.of(ClassName.of("com.example.Test"))
+			.set("counters", AttributeKind.ARRAY, 42)
+			.build();
+		assertThat(test.getAttributes()).singleElement()
+			.satisfies((attribute) -> assertThat(attribute.getKind()).isEqualTo(AttributeKind.ARRAY));
+		assertThat(write(test, BRACKET_FORMATTING_OPTIONS)).isEqualTo("@Test(counters = [42])");
+	}
+
+	@Test
+	void annotationWithAmendedValuesKeepsArrayAttributeKind() {
+		Annotation test = Annotation.of(ClassName.of("com.example.Test"))
+			.add("counters", AttributeKind.ARRAY, 42)
+			.add("counters")
+			.build();
+		assertThat(write(test, BRACKET_FORMATTING_OPTIONS)).isEqualTo("@Test(counters = [42])");
+	}
+
+	@Test
+	void annotationWithAmendedValuesUpgradesToArrayAttributeKind() {
+		Annotation test = Annotation.of(ClassName.of("com.example.Test"))
+			.add("counters", 42)
+			.add("counters", AttributeKind.ARRAY)
+			.build();
+		assertThat(write(test, BRACKET_FORMATTING_OPTIONS)).isEqualTo("@Test(counters = [42])");
+	}
+
+	@Test
+	void annotationWithNestedArrayAttributeKind() {
+		Annotation nested = Annotation.of(ClassName.of("com.example.Nested"))
+			.set("counters", AttributeKind.ARRAY, 42)
+			.build();
+		Annotation test = Annotation.of(ClassName.of("com.example.Test")).set("test", nested).build();
+		assertThat(write(test, BRACKET_FORMATTING_OPTIONS)).isEqualTo("@Test(test = @Nested(counters = [42]))");
+	}
+
+	@Test
+	void annotationFromKeepsArrayAttributeKind() {
+		Annotation source = Annotation.of(ClassName.of("com.example.Test"))
+			.set("counters", AttributeKind.ARRAY, 42)
+			.build();
+		Annotation test = Annotation.of(ClassName.of("com.example.Test")).from(source).build();
+		assertThat(write(test, BRACKET_FORMATTING_OPTIONS)).isEqualTo("@Test(counters = [42])");
 	}
 
 	private String write(Annotation annotation) {

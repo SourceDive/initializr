@@ -29,6 +29,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import io.spring.initializr.generator.io.IndentingWriterFactory;
+import io.spring.initializr.generator.language.Annotation.AttributeKind;
 import io.spring.initializr.generator.language.Annotation.Builder;
 import io.spring.initializr.generator.language.ClassName;
 import io.spring.initializr.generator.language.CodeBlock;
@@ -279,6 +280,14 @@ class GroovySourceCodeWriterTests {
 		assertThat(lines).containsExactly("package com.example", "", "import com.example.another.One",
 				"import com.example.another.Two", "import org.springframework.test.TestApplication", "",
 				"@TestApplication(target = [ One, Two ])", "class Test {", "", "}");
+	}
+
+	@Test
+	void annotationWithSingleValueArrayAttribute() throws IOException {
+		List<String> lines = writeClassAnnotation("org.springframework.test.TestApplication",
+				(builder) -> builder.set("include", AttributeKind.ARRAY, "a"));
+		assertThat(lines).containsExactly("package com.example", "", "import org.springframework.test.TestApplication",
+				"", "@TestApplication(include = \"a\")", "class Test {", "", "}");
 	}
 
 	private List<String> writeClassAnnotation(String annotationClassName, Consumer<Builder> annotation)

@@ -37,6 +37,7 @@ import org.springframework.util.ClassUtils;
  *
  * @author Andy Wilkinson
  * @author Stephane Nicoll
+ * @author Moritz Halbritter
  */
 public final class Annotation {
 
@@ -121,27 +122,58 @@ public final class Annotation {
 
 		/**
 		 * Set the attribute with the specified name with the specified values. If the
-		 * attribute exists, it is replaced by the specified values.
+		 * attribute exists, it is replaced by the specified values. A single value is
+		 * written as is; use {@link #set(String, AttributeKind, Object...)} with
+		 * {@link AttributeKind#ARRAY} if the attribute is an array.
 		 * @param name the name of the attribute
 		 * @param values the values to associate with the attribute
 		 * @return this for method chaining
 		 */
 		public Builder set(String name, Object... values) {
+			return set(name, AttributeKind.INFERRED, values);
+		}
+
+		/**
+		 * Set the attribute with the specified name and {@linkplain AttributeKind kind}
+		 * with the specified values. If the attribute exists, it is replaced by the
+		 * specified values.
+		 * @param name the name of the attribute
+		 * @param kind the kind of the attribute
+		 * @param values the values to associate with the attribute
+		 * @return this for method chaining
+		 */
+		public Builder set(String name, AttributeKind kind, Object... values) {
 			AttributeType type = determineAttributeType(values);
-			this.attributes.put(name, new Attribute(name, type, values));
+			this.attributes.put(name, new Attribute(name, type, kind, values));
 			return this;
 		}
 
 		/**
 		 * Add the specified values to the attribute with the specified name. If the
-		 * attribute does not exist, it is created with the specified values.
+		 * attribute does not exist, it is created with the specified values. A single
+		 * value is written as is; use {@link #add(String, AttributeKind, Object...)} with
+		 * {@link AttributeKind#ARRAY} if the attribute is an array.
 		 * @param name the name of the attribute
 		 * @param values the values to add to the attribute
 		 * @return this for method chaining
 		 */
 		public Builder add(String name, Object... values) {
+			return add(name, AttributeKind.INFERRED, values);
+		}
+
+		/**
+		 * Add the specified values to the attribute with the specified name and
+		 * {@linkplain AttributeKind kind}. If the attribute does not exist, it is created
+		 * with the specified values. If either the existing or the added attribute is an
+		 * {@linkplain AttributeKind#ARRAY array}, the result is an array.
+		 * @param name the name of the attribute
+		 * @param kind the kind of the attribute
+		 * @param values the values to add to the attribute
+		 * @return this for method chaining
+		 */
+		public Builder add(String name, AttributeKind kind, Object... values) {
 			AttributeType type = determineAttributeType(values);
-			this.attributes.merge(name, new Attribute(name, type, values), this::append);
+			this.attributes.merge(name, new Attribute(name, type, kind, values), this::append);
 			return this;
 		}
 
@@ -164,8 +196,15 @@ public final class Annotation {
 
 		private Attribute append(Attribute existing, Attribute additional) {
 			AttributeType typeToUse = AttributeType.getMostSpecificType(existing.type, additional.type);
-			return new Attribute(existing.name, typeToUse,
+			return new Attribute(existing.name, typeToUse, mergeKind(existing.kind, additional.kind),
 					Stream.concat(existing.values.stream(), additional.values.stream()).toArray());
+		}
+
+		private AttributeKind mergeKind(AttributeKind left, AttributeKind right) {
+			if (left == AttributeKind.ARRAY || right == AttributeKind.ARRAY) {
+				return AttributeKind.ARRAY;
+			}
+			return AttributeKind.INFERRED;
 		}
 
 		private AttributeType determineAttributeType(Object... values) {
@@ -189,11 +228,14 @@ public final class Annotation {
 
 		private final AttributeType type;
 
+		private final AttributeKind kind;
+
 		private final List<Object> values;
 
-		private Attribute(String name, AttributeType type, Object... values) {
+		private Attribute(String name, AttributeType type, AttributeKind kind, Object... values) {
 			this.name = name;
 			this.type = type;
+			this.kind = kind;
 			this.values = Arrays.asList(values);
 		}
 
@@ -214,12 +256,40 @@ public final class Annotation {
 		}
 
 		/**
+		 * Return the attribute kind.
+		 * @return the attribute kind
+		 */
+		public AttributeKind getKind() {
+			return this.kind;
+		}
+
+		/**
 		 * Return the values.
 		 * @return the values
 		 */
 		public List<Object> getValues() {
 			return this.values;
 		}
+
+	}
+
+	/**
+	 * Kind of an attribute.
+	 */
+	public enum AttributeKind {
+
+		/**
+		 * Single value if the attribute has one value, array otherwise.
+		 */
+		INFERRED,
+
+		/**
+		 * Array, even if the attribute has a single value. For instance, Kotlin requires
+		 * {@code include = ["a"]} rather than {@code include = "a"}. Not applied if
+		 * {@code value} is the only attribute, as it is written as a vararg, for instance
+		 * {@code @Test("a")}.
+		 */
+		ARRAY
 
 	}
 
@@ -369,7 +439,7 @@ public final class Annotation {
 			CodeBlock.Builder code = CodeBlock.builder();
 			code.add("@$T", annotation.className);
 			if (annotation.attributes.size() == 1 && annotation.attributes.get(0).getName().equals("value")) {
-				code.add("($L)", generateAttributeValuesCode(annotation.attributes.get(0)));
+				code.add("($L)", generateAttributeValuesCode(annotation.attributes.get(0), AttributeKind.INFERRED));
 			}
 			else if (!annotation.attributes.isEmpty()) {
 				CodeBlock attributes = annotation.attributes.stream()
@@ -381,14 +451,17 @@ public final class Annotation {
 		}
 
 		private CodeBlock generateAttributeCode(Attribute attribute) {
-			return CodeBlock.of("$L = $L", attribute.name, generateAttributeValuesCode(attribute));
+			return CodeBlock.of("$L = $L", attribute.name, generateAttributeValuesCode(attribute, attribute.kind));
 		}
 
-		private CodeBlock generateAttributeValuesCode(Attribute attribute) {
+		private CodeBlock generateAttributeValuesCode(Attribute attribute, AttributeKind kind) {
 			CodeBlock[] values = attribute.values.stream()
 				.map((value) -> generateValueCode(attribute.type, value))
 				.toArray(CodeBlock[]::new);
-			return (values.length == 1) ? values[0] : this.formattingOptions.arrayOf(values);
+			if (values.length == 1 && kind != AttributeKind.ARRAY) {
+				return values[0];
+			}
+			return this.formattingOptions.arrayOf(values);
 		}
 
 		private CodeBlock generateValueCode(AttributeType attributeType, Object value) {

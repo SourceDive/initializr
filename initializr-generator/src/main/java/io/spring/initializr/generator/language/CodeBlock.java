@@ -347,9 +347,11 @@ public final class CodeBlock {
 		String statementSeparator();
 
 		/**
-		 * Return the code that represents an array for the specified values.
+		 * Return the code that represents an array annotation attribute value for the
+		 * specified values. Implementations may omit the array syntax for a single value
+		 * if the language allows it.
 		 * @param values the values of the array
-		 * @return an array defining the specified values
+		 * @return the code for the specified values
 		 */
 		CodeBlock arrayOf(CodeBlock... values);
 
@@ -373,6 +375,9 @@ public final class CodeBlock {
 
 		@Override
 		public CodeBlock arrayOf(CodeBlock... values) {
+			if (values.length == 1) {
+				return values[0];
+			}
 			return CodeBlock.of("{ $L }", CodeBlock.join(Arrays.asList(values), ", "));
 		}
 
