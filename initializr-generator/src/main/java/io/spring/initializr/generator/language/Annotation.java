@@ -432,12 +432,13 @@ public final class Annotation {
 		}
 
 		void write(Annotation annotation) {
-			generateAnnotationCode(annotation).write(this.writer, this.formattingOptions);
+			generateAnnotationCode(annotation, CodeBlock.of("@$T", annotation.className)).write(this.writer,
+					this.formattingOptions);
 		}
 
-		private CodeBlock generateAnnotationCode(Annotation annotation) {
+		private CodeBlock generateAnnotationCode(Annotation annotation, CodeBlock start) {
 			CodeBlock.Builder code = CodeBlock.builder();
-			code.add("@$T", annotation.className);
+			code.add(start);
 			if (annotation.attributes.size() == 1 && annotation.attributes.get(0).getName().equals("value")) {
 				code.add("($L)", generateAttributeValuesCode(annotation.attributes.get(0), AttributeKind.INFERRED));
 			}
@@ -488,7 +489,10 @@ public final class Annotation {
 					Enum<?> enumValue = (Enum<?>) value;
 					yield CodeBlock.of("$T.$L", enumValue.getDeclaringClass(), enumValue.name());
 				}
-				case ANNOTATION -> generateAnnotationCode((Annotation) value);
+				case ANNOTATION -> {
+					Annotation nested = (Annotation) value;
+					yield generateAnnotationCode(nested, this.formattingOptions.nestedAnnotation(nested.className));
+				}
 				case CODE -> (CodeBlock) value;
 			};
 		}

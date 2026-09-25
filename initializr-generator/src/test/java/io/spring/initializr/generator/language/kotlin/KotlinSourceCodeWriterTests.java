@@ -28,6 +28,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import io.spring.initializr.generator.io.IndentingWriterFactory;
+import io.spring.initializr.generator.language.Annotation;
 import io.spring.initializr.generator.language.Annotation.AttributeKind;
 import io.spring.initializr.generator.language.Annotation.Builder;
 import io.spring.initializr.generator.language.ClassName;
@@ -373,6 +374,38 @@ class KotlinSourceCodeWriterTests {
 				(builder) -> builder.set("value", AttributeKind.ARRAY, "a").set("include", AttributeKind.ARRAY, "b"));
 		assertThat(lines).containsExactly("package com.example", "", "import org.springframework.test.TestApplication",
 				"", "@TestApplication(value = [\"a\"], include = [\"b\"])", "class Test");
+	}
+
+	@Test
+	void annotationWithNestedAnnotationAttribute() throws IOException {
+		Annotation inner = Annotation.of(ClassName.of("com.example.another.Inner")).set("value", "a").build();
+		List<String> lines = writeClassAnnotation("org.springframework.test.TestApplication",
+				(builder) -> builder.set("nested", inner));
+		assertThat(lines).containsExactly("package com.example", "", "import com.example.another.Inner",
+				"import org.springframework.test.TestApplication", "", "@TestApplication(nested = Inner(\"a\"))",
+				"class Test");
+	}
+
+	@Test
+	void annotationWithNestedAnnotationArrayAttribute() throws IOException {
+		Annotation one = Annotation.of(ClassName.of("com.example.another.Inner")).set("value", "a").build();
+		Annotation two = Annotation.of(ClassName.of("com.example.another.Inner")).set("value", "b").build();
+		List<String> lines = writeClassAnnotation("org.springframework.test.TestApplication",
+				(builder) -> builder.set("nested", one, two));
+		assertThat(lines).containsExactly("package com.example", "", "import com.example.another.Inner",
+				"import org.springframework.test.TestApplication", "",
+				"@TestApplication(nested = [Inner(\"a\"), Inner(\"b\")])", "class Test");
+	}
+
+	@Test
+	void annotationWithDeeplyNestedAnnotationAttribute() throws IOException {
+		Annotation deep = Annotation.of(ClassName.of("com.example.another.Deep")).set("value", "a").build();
+		Annotation inner = Annotation.of(ClassName.of("com.example.another.Inner")).set("deep", deep).build();
+		List<String> lines = writeClassAnnotation("org.springframework.test.TestApplication",
+				(builder) -> builder.set("nested", inner));
+		assertThat(lines).containsExactly("package com.example", "", "import com.example.another.Deep",
+				"import com.example.another.Inner", "import org.springframework.test.TestApplication", "",
+				"@TestApplication(nested = Inner(deep = Deep(\"a\")))", "class Test");
 	}
 
 	private List<String> writeClassAnnotation(String annotationClassName, Consumer<Builder> annotation)

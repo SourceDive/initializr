@@ -350,6 +350,11 @@ public class KotlinSourceCodeWriter implements SourceCodeWriter<KotlinSourceCode
 			return CodeBlock.of("$T::class", className);
 		}
 
+		@Override
+		public CodeBlock nestedAnnotation(ClassName className) {
+			return CodeBlock.of("$T", className);
+		}
+
 	}
 
 }

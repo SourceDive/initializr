@@ -29,6 +29,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import io.spring.initializr.generator.io.IndentingWriterFactory;
+import io.spring.initializr.generator.language.Annotation;
 import io.spring.initializr.generator.language.Annotation.AttributeKind;
 import io.spring.initializr.generator.language.Annotation.Builder;
 import io.spring.initializr.generator.language.ClassName;
@@ -288,6 +289,16 @@ class GroovySourceCodeWriterTests {
 				(builder) -> builder.set("include", AttributeKind.ARRAY, "a"));
 		assertThat(lines).containsExactly("package com.example", "", "import org.springframework.test.TestApplication",
 				"", "@TestApplication(include = \"a\")", "class Test {", "", "}");
+	}
+
+	@Test
+	void annotationWithNestedAnnotationAttribute() throws IOException {
+		Annotation inner = Annotation.of(ClassName.of("com.example.another.Inner")).set("value", "a").build();
+		List<String> lines = writeClassAnnotation("org.springframework.test.TestApplication",
+				(builder) -> builder.set("nested", inner));
+		assertThat(lines).containsExactly("package com.example", "", "import com.example.another.Inner",
+				"import org.springframework.test.TestApplication", "", "@TestApplication(nested = @Inner(\"a\"))",
+				"class Test {", "", "}");
 	}
 
 	private List<String> writeClassAnnotation(String annotationClassName, Consumer<Builder> annotation)

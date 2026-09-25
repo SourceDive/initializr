@@ -172,6 +172,17 @@ class AnnotationTests {
 	}
 
 	@Test
+	void annotationWithNestedAnnotationInvokeConfiguredFormattingOptions() {
+		ClassName nestedClassName = ClassName.of("com.example.Nested");
+		FormattingOptions options = mock(FormattingOptions.class);
+		given(options.nestedAnnotation(nestedClassName)).willReturn(CodeBlock.of("$T", nestedClassName));
+		Annotation nested = Annotation.of(nestedClassName).set("counter", 42).build();
+		Annotation test = Annotation.of(ClassName.of("com.example.Test")).set("test", nested).build();
+		assertThat(write(test, options)).isEqualTo("@Test(test = Nested(counter = 42))");
+		verify(options).nestedAnnotation(nestedClassName);
+	}
+
+	@Test
 	void annotationWithOnlyValueUsesShortcut() {
 		Annotation test = Annotation.of(ClassName.of("com.example.Test")).set("value", "test").build();
 		assertThat(write(test)).isEqualTo("@Test(\"test\")");

@@ -364,6 +364,17 @@ public final class CodeBlock {
 		 */
 		CodeBlock classReference(ClassName className);
 
+		/**
+		 * Return the code that starts an annotation used as an attribute value of another
+		 * annotation. For instance with java, a nested {@code com.example.Test}
+		 * annotation would start with {@code @Test}.
+		 * @param className the class name of the nested annotation
+		 * @return the start of the nested annotation
+		 */
+		default CodeBlock nestedAnnotation(ClassName className) {
+			return CodeBlock.of("@$T", className);
+		}
+
 	}
 
 	private static final class JavaFormattingOptions implements FormattingOptions {
